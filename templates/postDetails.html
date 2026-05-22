@@ -51,7 +51,8 @@
         <div>
             <a href="{{ url_for('update_post', id=post.id) }}">Edit</a>
             <form action="{{ url_for('delete_post', id=post.id) }}" method="POST" style="display:inline;">
-                <button type="submit" id="delete">Delete</button>
+            {{ delete_form.hidden_tag() }}
+            {{ delete_form.submit(id='delete') }}
             </form>
         </div>
 
@@ -60,6 +61,15 @@
             {% for comment in post.comments %}
                 <p>{{ comment.content }}</p>
             {% endfor %}
+        </div>
+
+        <div class="add-comment">
+          <h2>Add Comment:</h2>
+          <form action="{{ url_for('add_comment', id=post.id) }}" method="POST">
+            {{ comment_form.hidden_tag() }}
+            {{ comment_form.content() }}
+            {{ comment_form.submit() }}
+          </form>
         </div>
     </div>
 {% endblock %}

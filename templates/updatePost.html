@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Add Post{% endblock %}
+{% block title %}Update Post{% endblock %}
 {% block css %}
   <style>
     .post-form{
@@ -28,8 +28,8 @@
 {% endblock %}
 
 {% block content %}
-  <h1>Add Post</h1>
-  <form method="POST" class="post-form">
+  <h1>Update Post</h1>
+  <form method="POST" action="{{ url_for('update_post', id=post.id) }}" class="post-form">
     {{ form.hidden_tag() }}
     <div>
       {{ form.title.label }}

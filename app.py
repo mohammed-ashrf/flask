@@ -2,21 +2,76 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, url_for, redirect, request
+from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from db import db
 from forms import CommentForm
-from models import Post, Comment
+from models import Post, Comment, User
+
+from views.posts_views import PostUpdateView, PostsView, PostAddView ,PostDetailView, PostDeleteView, CommentAddView
+from views.users_views import UsersView, AddUserView, DeleteUserView, UpdateUserView
 
 app = Flask(__name__)
 load_dotenv()
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+
+
+def get_database_uri():
+    database_uri = os.getenv('DATABASE_URL')
+    if not database_uri:
+        return 'sqlite:///flask_app.db'
+
+    if database_uri.startswith(('postgresql://', 'postgres://')):
+        try:
+            engine = create_engine(database_uri, pool_pre_ping=True)
+            with engine.connect():
+                pass
+            return database_uri
+        except OperationalError:
+            print('PostgreSQL is unavailable; falling back to sqlite:///flask_app.db')
+            return 'sqlite:///flask_app.db'
+
+    return database_uri
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = get_database_uri()
 db.init_app(app)
 
-@app.route('/', methods=['GET'])
-def home():
-    posts = Post.query.all()
-    form = CommentForm()
-    return render_template('home.html', posts=posts, form=form)
+posts_view = PostsView.as_view('home')
+app.add_url_rule('/', view_func=posts_view, methods=['GET'])
+
+users_list_view = UsersView.as_view('users_list')
+app.add_url_rule('/users', view_func=users_list_view, methods=['GET'])
+
+users_add_view = AddUserView.as_view('add_user')
+app.add_url_rule('/add-user', view_func=users_add_view, methods=['GET', 'POST'])
+
+users_delete_view = DeleteUserView.as_view('delete_user')
+app.add_url_rule('/delete-user/<int:id>', view_func=users_delete_view, methods=['POST'])
+
+
+users_update_view = UpdateUserView.as_view('update_user')
+app.add_url_rule('/update-user/<int:id>', view_func=users_update_view, methods=['GET', 'POST'])
+
+add_posts_view = PostAddView.as_view('add_post')
+app.add_url_rule('/add-post', view_func=add_posts_view, methods=['GET', 'POST']);
+
+
+post_detail_view = PostDetailView.as_view('post_detail')
+app.add_url_rule('/post/<int:id>', view_func=post_detail_view, methods=['GET']);
+
+
+post_update_view = PostUpdateView.as_view('update_post')
+app.add_url_rule('/post/<int:id>/update', view_func=post_update_view, methods=['GET', 'POST']);
+
+
+post_delete_view = PostDeleteView.as_view('delete_post')
+app.add_url_rule('/post/<int:id>/delete', view_func=post_delete_view, methods=['POST']);
+
+comment_add_view = CommentAddView.as_view('add_comment')
+app.add_url_rule('/post/<int:id>/add-comment', view_func=comment_add_view, methods=['POST']);
+
+
 
 @app.route('/about', methods=['GET'])
 def about():
@@ -39,95 +94,6 @@ def user_info(username, age):
     print(type(age))
     return f"Hello, {username}! You are {age} years old."
 
-users = [
-    {"id":1,"name":"ali","age":20},
-    {"id":2,"name":"ahmed","age":30},
-]
-
-@app.route('/users', methods=['GET'])
-def users_list():
-    return render_template('users.html', users=users)
-
-
-@app.route('/add-user/<name>/<int:age>', methods=['GET', 'POST'])
-@app.route('/add-user', methods=['GET', 'POST'])
-def add_user(name=None, age=None):
-    if request.method == 'POST':
-        if not name or not age:
-            name = request.form['name']
-            age = int(request.form['age'])
-        user = {"id": len(users) + 1, "name": name, "age": age}
-        users.append(user)
-        return redirect(url_for('users_list'))
-    return render_template('addUser.html')
-
-@app.route('/delete-user/<int:id>', methods=['GET', 'POST'])
-def delete_user(id):
-    global users
-    users = [user for user in users if user['id'] != id]
-    return redirect(url_for('users_list'))
-
-
-@app.route('/update-user/<int:id>/edit/<name>/<int:age>', methods=['GET', 'POST'])
-@app.route('/update-user/<int:id>', methods=['GET', 'POST'])
-def update_user(id, name=None, age=None):
-    if request.method == 'POST':
-        if name is None or age is None:
-            name = request.form['name']
-            age = int(request.form['age'])
-        if id > len(users) or id <= 0:
-            return "User not found"
-        for user in users:
-            if user['id'] == id:
-                user['name'] = name
-                user['age'] = age
-                return redirect(url_for('users_list'))
-    return render_template('updateUser.html', user=users[id - 1])
-
-
-@app.route('/add-post', methods=['GET', 'POST'])
-def add_post():
-    if request.method == 'POST':
-        title = request.form['title']
-        content = request.form['content']
-        auther = request.form['auther']
-        post = Post(title=title, content=content, auther=auther)
-        db.session.add(post)
-        db.session.commit()
-        return redirect(url_for('home'))
-    return render_template('addPost.html')
-
-
-@app.route('/post/<int:id>', methods=['GET'])
-def post_detail(id):
-    post = Post.query.get_or_404(id)
-    return render_template('postDetails.html', post=post)
-
-@app.route('/post/<int:id>/update', methods=['POST'])
-def update_post(id):
-    post = Post.query.get_or_404(id)
-    post.title = request.form['title']
-    post.content = request.form['content']
-    post.auther = request.form['auther']
-    db.session.commit()
-    return redirect(url_for('post_detail', id=post.id))
-
-
-@app.route('/post/<int:id>/delete', methods=['POST'])
-def delete_post(id):
-    post = Post.query.get_or_404(id)
-    db.session.delete(post)
-    db.session.commit()
-    return redirect(url_for('home'))
-
-@app.route('/post/<int:id>/add-comment', methods=['POST'])
-def add_comment(id):
-    post= Post.query.get_or_404(id)
-    content = request.form['content']
-    comment= Comment(content=content, post=post)
-    db.session.add(comment)
-    db.session.commit()
-    return redirect(url_for('home'))
 
 if __name__ == '__main__':
     with app.app_context():
